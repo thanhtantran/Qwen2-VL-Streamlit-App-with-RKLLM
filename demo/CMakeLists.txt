@@ -41,7 +41,7 @@ add_executable(imgenc src/image_enc.cc src/img_encoder.cpp)
 target_link_libraries(imgenc PRIVATE ${OpenCV_LIBS} ${LIBRKNNRT})
 
 # rkllm runtime
-set(RKLLM_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../../rkllm-runtime)
+set(RKLLM_PATH ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/rkllm-runtime)
 set(LIBRKLLMRT ${RKLLM_PATH}/${CMAKE_SYSTEM_NAME}/librkllm_api/${TARGET_LIB_ARCH}/librkllmrt.so)
 set(LIBRKLLMRT_INCLUDES ${RKLLM_PATH}/${CMAKE_SYSTEM_NAME}/librkllm_api/include)
 
@@ -58,7 +58,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE ${OpenCV_LIBS} ${LIBRKNNRT} ${LIBR
 set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS  -Wl,--no-undefined,--version-script,${CMAKE_SOURCE_DIR}/c_export.map)
 
 # Install the executable file to the specified directory
-set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/install/demo_${CMAKE_SYSTEM_NAME}_${TARGET_LIB_ARCH})
+set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/build)
 install(TARGETS imgenc llm ${PROJECT_NAME} DESTINATION ./)
 install(PROGRAMS ${LIBRKNNRT} ${LIBRKLLMRT} DESTINATION lib)
 install(PROGRAMS ../data/demo.jpg DESTINATION ./)
