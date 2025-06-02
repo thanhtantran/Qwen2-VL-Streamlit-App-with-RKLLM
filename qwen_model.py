@@ -1,8 +1,10 @@
 # qwen_model.py
 import numpy as np
 import logging
+import os
 from typing import Optional
 from ctypes import *
+import sys
 
 from rknn_bindings import (
     rkllm_lib, RKLLMParam, RKLLMExtendParam, RKLLMInput, RKLLMMultimodalInput, 
@@ -14,16 +16,23 @@ from rknn_bindings import (
 logger = logging.getLogger(__name__)
 
 # Define a proper callback function type
-def dummy_callback(result, userdata, state):
-    """Dummy callback function"""
-    pass
+def callback_func(result, userdata, state):
+    """Callback function to capture model output"""
+    if state == RKLLM_RUN_NORMAL and result and result.contents.text:
+        # Get the model instance from userdata
+        model_instance = cast(userdata, py_object).value
+        if hasattr(model_instance, 'current_response'):
+            # Append new text to the current response
+            new_text = result.contents.text.decode('utf-8', errors='ignore')
+            model_instance.current_response += new_text
+    return None
 
 # Create the callback function pointer
-CALLBACK_FUNC = CallbackFunc(dummy_callback)
+CALLBACK_FUNC = CallbackFunc(callback_func)
 
 class QwenVLModel:
     def __init__(self, model_path: str, max_new_tokens: int = 256, max_context_len: int = 1024):
-        self.model_path = model_path.encode('utf-8')
+        self.model_path = model_path
         self.max_new_tokens = max_new_tokens
         self.max_context_len = max_context_len
         self.llm_handle = None
@@ -33,9 +42,14 @@ class QwenVLModel:
         
     def init_model(self) -> bool:
         try:
+            # Validate model file
+            if not os.path.exists(self.model_path):
+                print(f"❌ Model file does not exist: {self.model_path}")
+                return False
+                
             print("Setting up parameters...")
             param = RKLLMParam()
-            param.model_path = self.model_path
+            param.model_path = self.model_path.encode('utf-8')
             param.max_new_tokens = self.max_new_tokens
             param.max_context_len = self.max_context_len
             param.top_k = 1
@@ -72,27 +86,14 @@ class QwenVLModel:
                 raise Exception(f"rkllm_init failed with code {ret}")
             
             print("rkllm_init successful")
-            
-            # Set chat template
-            print("Setting chat template...")
-            system_prompt = b"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n\0"
-            user_prompt = b"<|im_start|>user\n\0"
-            assistant_prompt = b"<|im_end|>\n<|im_start|>assistant\n\0"
-            
-            ret = rkllm_lib.rkllm_set_chat_template(self.llm_handle, system_prompt, user_prompt, assistant_prompt)
-            if ret != 0:
-                print(f"Warning: rkllm_set_chat_template failed with code {ret}")
-                # Continue anyway, might not be critical
-            
             self.is_initialized = True
-            print("✅ LLM model initialized successfully")
             return True
-                
-        except Exception as e:
-            print(f"❌ QwenVLModel init failed: {e}")
-            logger.error(f"QwenVLModel init failed: {e}")
-            return False
             
+        except Exception as e:
+            print(f"❌ Model initialization failed: {e}")
+            logger.error(f"Model initialization failed: {e}")
+            return False
+
     def generate_response(self, prompt: str, image_features: Optional[np.ndarray] = None) -> str:
         if not self.is_initialized:
             return "Error: Model not initialized"
@@ -131,8 +132,11 @@ class QwenVLModel:
             infer_params.mode = RKLLM_INFER_GENERATE
             infer_params.keep_history = 0
             
+            # Create a pointer to self for the callback
+            self_ptr = py_object(self)
+            
             print("Running inference...")
-            ret = rkllm_lib.rkllm_run(self.llm_handle, byref(rkllm_input), byref(infer_params), None)
+            ret = rkllm_lib.rkllm_run(self.llm_handle, byref(rkllm_input), byref(infer_params), byref(self_ptr))
             
             if ret == 0:
                 print("✅ Response generated successfully")
@@ -146,20 +150,31 @@ class QwenVLModel:
             return f"Error: {str(e)}"
             
     def clear_history(self):
-        self.chat_history = []
+        """Clear the KV cache"""
         if self.is_initialized and self.llm_handle:
             try:
-                rkllm_lib.rkllm_clear_kv_cache(self.llm_handle, 1)
-            except:
-                pass
-        
+                ret = rkllm_lib.rkllm_clear_kv_cache(self.llm_handle, 0)
+                if ret == 0:
+                    print("✅ KV cache cleared")
+                else:
+                    print(f"⚠️ Failed to clear KV cache: {ret}")
+            except Exception as e:
+                print(f"❌ Error clearing KV cache: {e}")
+                
     def release(self):
+        """Release model resources"""
         if self.is_initialized and self.llm_handle:
-            print("Releasing RKLLM handle...")
             try:
-                rkllm_lib.rkllm_destroy(self.llm_handle)
+                print("Releasing RKLLM handle...")
+                ret = rkllm_lib.rkllm_destroy(self.llm_handle)
+                if ret == 0:
+                    print("✅ RKLLM handle released")
+                else:
+                    print(f"⚠️ RKLLM destroy returned: {ret}")
+                    
                 self.llm_handle = None
                 self.is_initialized = False
-                print("✅ RKLLM handle released")
+                
             except Exception as e:
-                print(f"Warning: Error releasing RKLLM handle: {e}")
+                print(f"❌ Error releasing model: {e}")
+                logger.error(f"Error releasing model: {e}")

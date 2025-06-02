@@ -29,11 +29,25 @@ def cleanup_models():
 
 atexit.register(cleanup_models)
 
+def check_model_directory():
+    """Check if model directory exists and contains required files"""
+    model_dir = os.path.dirname(ENCODER_MODEL_PATH)
+    if not os.path.exists(model_dir):
+        return False, f"Model directory not found: {model_dir}"
+    
+    if not os.path.exists(ENCODER_MODEL_PATH):
+        return False, f"Encoder model not found: {ENCODER_MODEL_PATH}"
+    
+    if not os.path.exists(LLM_MODEL_PATH):
+        return False, f"LLM model not found: {LLM_MODEL_PATH}"
+    
+    return True, "Model files found"
+
 def safe_import_modules():
     """Import modules with error handling"""
     try:
         from image_encoder import ImageEncoder
-        from qwen_model import QwenVLModel
+        from qwen_model import QwenVLModel  # Using the fully implemented version
         return ImageEncoder, QwenVLModel, None
     except Exception as e:
         return None, None, str(e)
@@ -46,6 +60,13 @@ def main():
     )
     
     st.title("🖼️ Qwen2-VL Image Question & Answer")
+    
+    # Check model directory
+    models_ok, model_message = check_model_directory()
+    if not models_ok:
+        st.error(f"❌ {model_message}")
+        st.info("Please ensure the model files are in the correct location.")
+        st.stop()
     
     # Import modules
     ImageEncoder, QwenVLModel, import_error = safe_import_modules()
