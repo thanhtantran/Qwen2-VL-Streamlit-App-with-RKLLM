@@ -237,7 +237,9 @@ with col2:
                             line = st.session_state.chat_process.stdout.readline()
                             if line:
                                 st.session_state.process_output += line
-                                if "user:" in line and not st.session_state.model_ready:
+                                # Check if model is ready based on the question prompt
+                                if ("You can enter the following question numbers" in line or 
+                                    "*************************************************************************" in st.session_state.process_output) and not st.session_state.model_ready:
                                     st.session_state.model_ready = True
                     else:
                         # Windows fallback - check periodically
@@ -252,27 +254,35 @@ with col2:
                             disabled=True
                         )
                     
-                    # Show chat interface when model is ready
-                    if st.session_state.model_ready:
+                    # Show chat interface when model is ready or always show if process is running
+                    if st.session_state.model_ready or "rkllm init success" in st.session_state.process_output:
                         st.subheader("💬 Chat Interface")
+                        
+                        # Show status
+                        if st.session_state.model_ready:
+                            st.success("🟢 Model is ready for questions!")
+                        else:
+                            st.info("🟡 Model is loading... Please wait.")
                         
                         # Quick question buttons
                         col_q1, col_q2 = st.columns(2)
                         with col_q1:
-                            if st.button("❓ What is in the image?"):
+                            if st.button("❓ What is in the image?", disabled=not st.session_state.model_ready):
                                 try:
                                     st.session_state.chat_process.stdin.write("0\n")
                                     st.session_state.chat_process.stdin.flush()
                                     st.session_state.chat_history.append("User: [0] What is in the image?")
+                                    st.rerun()
                                 except Exception as e:
                                     st.error(f"Error sending input: {e}")
                         
                         with col_q2:
-                            if st.button("🌐 Trong bức ảnh có gì?"):
+                            if st.button("🌐 Trong bức ảnh có gì?", disabled=not st.session_state.model_ready):
                                 try:
                                     st.session_state.chat_process.stdin.write("1\n")
                                     st.session_state.chat_process.stdin.flush()
                                     st.session_state.chat_history.append("User: [1] Trong bức ảnh có gì?")
+                                    st.rerun()
                                 except Exception as e:
                                     st.error(f"Error sending input: {e}")
                         
@@ -280,15 +290,17 @@ with col2:
                         user_input = st.text_input(
                             "💭 Or enter your custom question:",
                             placeholder="Type your question here...",
-                            key="user_question"
+                            key="user_question",
+                            disabled=not st.session_state.model_ready
                         )
                         
-                        if st.button("📤 Send Custom Question") and user_input:
+                        if st.button("📤 Send Custom Question", disabled=not st.session_state.model_ready or not user_input) and user_input:
                             try:
                                 st.session_state.chat_process.stdin.write(f"{user_input}\n")
                                 st.session_state.chat_process.stdin.flush()
                                 st.session_state.chat_history.append(f"User: {user_input}")
-                                st.session_state.user_question = ""  # Clear input
+                                # Clear the input by rerunning
+                                st.rerun()
                             except Exception as e:
                                 st.error(f"Error sending input: {e}")
                         
@@ -296,7 +308,10 @@ with col2:
                         if st.session_state.chat_history:
                             st.subheader("📜 Chat History")
                             for message in st.session_state.chat_history:
-                                st.text(message)
+                                if message.startswith("User:"):
+                                    st.markdown(f"**{message}**")
+                                else:
+                                    st.markdown(message)
                     
                     # Auto-refresh every 2 seconds when process is running
                     time.sleep(2)
