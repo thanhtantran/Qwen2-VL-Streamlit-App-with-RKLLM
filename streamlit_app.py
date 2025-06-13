@@ -15,12 +15,23 @@ st.set_page_config(
     layout="wide"
 )
 
-# Title and description
-st.title("🤖 Qwen2-VL RKLLM Inference App")
-st.markdown("""
-This app allows you to run Qwen2-VL model inference using RKLLM runtime.
-Upload an image and configure the model parameters to get AI-generated responses.
-""")
+# Header with logo
+col_title, col_logo = st.columns([3, 1])
+with col_title:
+    st.title("🤖 Qwen2-VL RKLLM Inference App")
+    st.markdown("""
+    This app allows you to run Qwen2-VL model inference using RKLLM runtime.
+    Upload an image and configure the model parameters to get AI-generated responses.
+    """)
+with col_logo:
+    # Orange Pi Vietnam logo
+    st.markdown("""
+    <div style="text-align: right; padding-top: 20px;">
+        <a href="https://orangepi.vn" target="_blank">
+            <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjgwIiB2aWV3Qm94PSIwIDAgMTIwIDgwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8Y2lyY2xlIGN4PSIyNSIgY3k9IjI1IiByPSIyMCIgZmlsbD0iI0ZGQTUwMCIvPgo8cGF0aCBkPSJNMTUgMjVMMzUgMjUiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxwYXRoIGQ9Ik0yNSAxNUwyNSAzNSIgc3Ryb2tlPSIjRkZGRkZGIiBzdHJva2Utd2lkdGg9IjIiLz4KPHN0YXIgY3g9IjkwIiBjeT0iNDAiIHI9IjEwIiBmaWxsPSIjRkYwMDAwIi8+Cjx0ZXh0IHg9IjUwIiB5PSIzNSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmaWxsPSIjMzMzMzMzIj5PcmFuZ2UgUGk8L3RleHQ+Cjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjEyIiBmaWxsPSIjNjY2NjY2Ij5WaWV0bmFtPC90ZXh0Pgo8L3N2Zz4K" alt="Orange Pi Vietnam" style="height: 60px;">
+        </a>
+    </div>
+    """, unsafe_allow_html=True)
 
 # Sidebar for configuration
 st.sidebar.header("⚙️ Configuration")
@@ -107,7 +118,7 @@ with col1:
     if uploaded_file is not None:
         # Display uploaded image
         image = Image.open(uploaded_file)
-        st.image(image, caption="Uploaded Image", use_column_width=True)
+        st.image(image, caption="Uploaded Image", use_container_width=True)
         
         # Save uploaded file to data folder with datetime name
         data_dir = Path("data")
@@ -126,7 +137,7 @@ with col1:
         # Use demo image
         image_path = "./data/demo.jpg"
         demo_image = Image.open(image_path)
-        st.image(demo_image, caption="Demo Image", use_column_width=True)
+        st.image(demo_image, caption="Demo Image", use_container_width=True)
     else:
         image_path = None
         st.info("Please upload an image or use the demo image.")
@@ -316,9 +327,12 @@ st.markdown("""
   - 1: Single core (AUTO mode)
   - 2: Dual core (cores 0+1)
   - 3: Triple core (cores 0+1+2)
-
-### 🔧 Command Format:
-```bash
-./app/build/app <image_path> <vision_model.rknn> <llm_model.rkllm> <max_new_tokens> <max_context_len> <core_num>
-```
 """)
+
+# Copyright footer
+st.markdown("---")
+st.markdown("""
+<div style="text-align: center; padding: 20px; color: #666666;">
+    © 2025 Copyright by <a href="https://orangepi.vn" target="_blank" style="color: #FF6B35; text-decoration: none;">Orange Pi Vietnam</a>
+</div>
+""", unsafe_allow_html=True)
