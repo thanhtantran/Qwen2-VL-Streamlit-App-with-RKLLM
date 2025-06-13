@@ -29,12 +29,12 @@ set(LIBRKNNRT ${RKNN_PATH}/${CMAKE_SYSTEM_NAME}/librknn_api/${TARGET_LIB_ARCH}/l
 set(LIBRKNNRT_INCLUDES ${RKNN_PATH}/${CMAKE_SYSTEM_NAME}/librknn_api/include)
 
 # imgenc
-include_directories(src/image_enc.h ${LIBRKNNRT_INCLUDES})
+include_directories(src ${LIBRKNNRT_INCLUDES})
 add_executable(imgenc src/image_enc.cc src/img_encoder.cpp)
 target_link_libraries(imgenc PRIVATE ${OpenCV_LIBS} ${LIBRKNNRT})
 
 # rkllm runtime
-set(RKLLM_PATH ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/rkllm-runtime)
+set(RKLLM_PATH ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/librknnrt/${CMAKE_SYSTEM_NAME}/rkllm-runtime)
 set(LIBRKLLMRT ${RKLLM_PATH}/${CMAKE_SYSTEM_NAME}/librkllm_api/${TARGET_LIB_ARCH}/librkllmrt.so)
 set(LIBRKLLMRT_INCLUDES ${RKLLM_PATH}/${CMAKE_SYSTEM_NAME}/librkllm_api/include)
 

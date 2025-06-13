@@ -116,7 +116,7 @@ int main(int argc, char **argv)
     memset(&rkllm_infer_params, 0, sizeof(RKLLMInferParam));
     rkllm_infer_params.mode = RKLLM_INFER_GENERATE;
 
-    rkllm_infer_params.keep_history = 0;
+    // Note: keep_history is not available in this API version
     rkllm_set_chat_template(llmHandle, "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n", "<|im_start|>user\n", "<|im_end|>\n<|im_start|>assistant\n");
 
     while (true)
