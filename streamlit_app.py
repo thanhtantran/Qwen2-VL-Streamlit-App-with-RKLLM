@@ -2,9 +2,11 @@ import streamlit as st
 import subprocess
 import os
 from pathlib import Path
-import tempfile
 from PIL import Image
 import time
+from datetime import datetime
+import threading
+import queue
 
 # Set page config
 st.set_page_config(
@@ -107,10 +109,19 @@ with col1:
         image = Image.open(uploaded_file)
         st.image(image, caption="Uploaded Image", use_column_width=True)
         
-        # Save uploaded file temporarily
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{uploaded_file.name.split('.')[-1]}") as tmp_file:
-            tmp_file.write(uploaded_file.getvalue())
-            image_path = tmp_file.name
+        # Save uploaded file to data folder with datetime name
+        data_dir = Path("data")
+        data_dir.mkdir(exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_extension = uploaded_file.name.split('.')[-1]
+        filename = f"{timestamp}.{file_extension}"
+        image_path = data_dir / filename
+        
+        with open(image_path, "wb") as f:
+            f.write(uploaded_file.getvalue())
+        
+        image_path = str(image_path)
     elif use_demo and Path("data/demo.jpg").exists():
         # Use demo image
         image_path = "./data/demo.jpg"
@@ -147,56 +158,143 @@ with col2:
         
         st.code(" ".join(command), language="bash")
         
-        if st.button("🔥 Run Inference", type="primary", use_container_width=True):
-            with st.spinner("Running inference..."):
+        # Initialize session state for chat
+        if 'chat_process' not in st.session_state:
+            st.session_state.chat_process = None
+        if 'chat_history' not in st.session_state:
+            st.session_state.chat_history = []
+        if 'process_output' not in st.session_state:
+            st.session_state.process_output = ""
+        if 'model_ready' not in st.session_state:
+            st.session_state.model_ready = False
+            
+        # Start inference button
+        if st.button("🔥 Start Interactive Chat", type="primary", use_container_width=True):
+            if st.session_state.chat_process is None:
                 try:
-                    # Run the command
-                    result = subprocess.run(
+                    # Start the process
+                    st.session_state.chat_process = subprocess.Popen(
                         command,
-                        capture_output=True,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
                         text=True,
-                        timeout=300  # 5 minute timeout
+                        bufsize=1,
+                        universal_newlines=True
                     )
-                    
-                    if result.returncode == 0:
-                        st.success("✅ Inference completed successfully!")
-                        
-                        # Display output
-                        st.subheader("📝 Model Output")
-                        if result.stdout:
-                            st.text_area(
-                                "Standard Output:",
-                                value=result.stdout,
-                                height=200,
-                                disabled=True
-                            )
-                        
-                        if result.stderr:
-                            st.text_area(
-                                "Standard Error:",
-                                value=result.stderr,
-                                height=100,
-                                disabled=True
-                            )
-                    else:
-                        st.error(f"❌ Inference failed with return code: {result.returncode}")
-                        if result.stderr:
-                            st.error(f"Error: {result.stderr}")
-                        if result.stdout:
-                            st.info(f"Output: {result.stdout}")
-                            
-                except subprocess.TimeoutExpired:
-                    st.error("❌ Inference timed out (5 minutes)")
+                    st.session_state.model_ready = False
+                    st.session_state.process_output = ""
+                    st.session_state.chat_history = []
+                    st.success("✅ Starting inference process...")
+                    st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Error running inference: {str(e)}")
-                    
+                    st.error(f"❌ Error starting process: {str(e)}")
+        
+        # Stop inference button
+        if st.session_state.chat_process is not None:
+            if st.button("🛑 Stop Chat", type="secondary", use_container_width=True):
+                try:
+                    st.session_state.chat_process.terminate()
+                    st.session_state.chat_process.wait(timeout=5)
+                except:
+                    st.session_state.chat_process.kill()
                 finally:
-                    # Clean up temporary file if it was created
-                    if uploaded_file is not None and os.path.exists(image_path):
-                        try:
-                            os.unlink(image_path)
-                        except:
-                            pass
+                    st.session_state.chat_process = None
+                    st.session_state.model_ready = False
+                    st.session_state.process_output = ""
+                    st.success("✅ Chat stopped")
+                    st.rerun()
+        
+        # Monitor process output
+        if st.session_state.chat_process is not None:
+            try:
+                # Check if process is still running
+                if st.session_state.chat_process.poll() is not None:
+                    st.error("❌ Process has terminated")
+                    st.session_state.chat_process = None
+                    st.session_state.model_ready = False
+                    st.rerun()
+                else:
+                    # Read available output
+                    import select
+                    import sys
+                    
+                    # For Windows compatibility, use a different approach
+                    if hasattr(select, 'select'):
+                        ready, _, _ = select.select([st.session_state.chat_process.stdout], [], [], 0.1)
+                        if ready:
+                            line = st.session_state.chat_process.stdout.readline()
+                            if line:
+                                st.session_state.process_output += line
+                                if "user:" in line and not st.session_state.model_ready:
+                                    st.session_state.model_ready = True
+                    else:
+                        # Windows fallback - check periodically
+                        time.sleep(0.1)
+                        
+                    # Display current output
+                    if st.session_state.process_output:
+                        st.text_area(
+                            "📟 Process Output:",
+                            value=st.session_state.process_output,
+                            height=300,
+                            disabled=True
+                        )
+                    
+                    # Show chat interface when model is ready
+                    if st.session_state.model_ready:
+                        st.subheader("💬 Chat Interface")
+                        
+                        # Quick question buttons
+                        col_q1, col_q2 = st.columns(2)
+                        with col_q1:
+                            if st.button("❓ What is in the image?"):
+                                try:
+                                    st.session_state.chat_process.stdin.write("0\n")
+                                    st.session_state.chat_process.stdin.flush()
+                                    st.session_state.chat_history.append("User: [0] What is in the image?")
+                                except Exception as e:
+                                    st.error(f"Error sending input: {e}")
+                        
+                        with col_q2:
+                            if st.button("🌐 Trong bức ảnh có gì?"):
+                                try:
+                                    st.session_state.chat_process.stdin.write("1\n")
+                                    st.session_state.chat_process.stdin.flush()
+                                    st.session_state.chat_history.append("User: [1] Trong bức ảnh có gì?")
+                                except Exception as e:
+                                    st.error(f"Error sending input: {e}")
+                        
+                        # Custom input
+                        user_input = st.text_input(
+                            "💭 Or enter your custom question:",
+                            placeholder="Type your question here...",
+                            key="user_question"
+                        )
+                        
+                        if st.button("📤 Send Custom Question") and user_input:
+                            try:
+                                st.session_state.chat_process.stdin.write(f"{user_input}\n")
+                                st.session_state.chat_process.stdin.flush()
+                                st.session_state.chat_history.append(f"User: {user_input}")
+                                st.session_state.user_question = ""  # Clear input
+                            except Exception as e:
+                                st.error(f"Error sending input: {e}")
+                        
+                        # Display chat history
+                        if st.session_state.chat_history:
+                            st.subheader("📜 Chat History")
+                            for message in st.session_state.chat_history:
+                                st.text(message)
+                    
+                    # Auto-refresh every 2 seconds when process is running
+                    time.sleep(2)
+                    st.rerun()
+                    
+            except Exception as e:
+                st.error(f"❌ Error monitoring process: {str(e)}")
+                st.session_state.chat_process = None
+                st.session_state.model_ready = False
     else:
         st.warning("⚠️ Requirements not met:")
         if image_path is None:
