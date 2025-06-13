@@ -25,6 +25,7 @@ with col_title:
     """)
 with col_logo:
     # Orange Pi Vietnam logo
+    st.image("https://orangepi.vn/wp-content/uploads/2018/05/logo1-1.png", width=120)
     st.markdown("""
     <div style="text-align: right; padding-top: 20px;">
         <a href="https://orangepi.vn" target="_blank">
@@ -259,49 +260,15 @@ with col2:
                         st.subheader("💬 Chat Interface")
                         
                         # Show detailed status
+                        # Check model readiness
+                        if ("**********************You can enter the following question numbers" in st.session_state.process_output) and not st.session_state.model_ready:
+                            st.session_state.model_ready = True
+                        
+                        # Simple status display
                         if st.session_state.model_ready:
                             st.success("🟢 Model is ready for questions!")
                         else:
-                            # Show detailed loading status
-                            with st.expander("🟡 Model is loading... Please wait. (Click to see details)", expanded=True):
-                                st.markdown("**Current Status:**")
-                                
-                                # Parse the output to show specific loading stages
-                                output_lines = st.session_state.process_output.split('\n')
-                                
-                                # Check for specific milestones
-                                milestones = {
-                                    "RKLLM Runtime": "rkllm-runtime version" in st.session_state.process_output,
-                                    "Model Loading": "loading rkllm model" in st.session_state.process_output,
-                                    "NPU Configuration": "npu_core_num" in st.session_state.process_output,
-                                    "CPU Configuration": "Enabled cpus" in st.session_state.process_output,
-                                    "RKLLM Init": "rkllm init success" in st.session_state.process_output,
-                                    "LLM Model": "LLM Model loaded" in st.session_state.process_output,
-                                    "Image Encoder": "ImgEnc Model loaded" in st.session_state.process_output,
-                                    "Chat Template": "reset chat template" in st.session_state.process_output,
-                                    "Ready for Input": "You can enter the following question numbers" in st.session_state.process_output
-                                }
-                                
-                                # Display milestone progress
-                                for milestone, completed in milestones.items():
-                                    if completed:
-                                        st.markdown(f"✅ {milestone}")
-                                    else:
-                                        st.markdown(f"⏳ {milestone}")
-                                
-                                # Show recent output lines
-                                st.markdown("**Recent Output:**")
-                                recent_lines = [line for line in output_lines[-10:] if line.strip()]
-                                for line in recent_lines:
-                                    if line.strip():
-                                        st.code(line, language="text")
-                                
-                                # Show timing information if available
-                                timing_lines = [line for line in output_lines if "ms" in line and "loaded" in line]
-                                if timing_lines:
-                                    st.markdown("**Loading Times:**")
-                                    for timing in timing_lines:
-                                        st.markdown(f"⏱️ {timing.strip()}")
+                            st.info("🟡 Model is loading... Please wait.")
                         
                         # Quick question buttons
                         col_q1, col_q2 = st.columns(2)
@@ -385,8 +352,4 @@ st.markdown("""
 
 # Copyright footer
 st.markdown("---")
-st.markdown("""
-<div style="text-align: center; padding: 20px; color: #666666;">
-    © 2025 Copyright by <a href="https://orangepi.vn" target="_blank" style="color: #FF6B35; text-decoration: none;">Orange Pi Vietnam</a>
-</div>
-""", unsafe_allow_html=True)
+st.markdown("© 2025 Copyright by [Orange Pi Vietnam](https://orangepi.vn)", unsafe_allow_html=False)
