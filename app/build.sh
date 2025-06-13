@@ -7,4 +7,3 @@ cmake .. -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
 
 make -j8
-make install

@@ -43,7 +43,7 @@ include_directories(${LIBRKLLMRT_INCLUDES})
 add_executable(llm src/llm.cpp)
 target_link_libraries(llm PRIVATE ${LIBRKLLMRT})
 
-# demo
+# main
 add_executable(${PROJECT_NAME} src/image_enc.cc src/main.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${OpenCV_LIBS} ${LIBRKNNRT} ${LIBRKLLMRT})
 
@@ -52,6 +52,4 @@ set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS  -Wl,--no-undefined,
 
 # Install the executable file to the specified directory
 set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/build)
-install(TARGETS imgenc llm ${PROJECT_NAME} DESTINATION ./)
-install(PROGRAMS ${LIBRKNNRT} ${LIBRKLLMRT} DESTINATION lib)
-install(PROGRAMS ../data/demo.jpg DESTINATION ./)
+install(TARGETS imgenc llm ${PROJECT_NAME} DESTINATION ./ OPTIONAL)
