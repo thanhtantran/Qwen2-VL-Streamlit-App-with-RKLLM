@@ -258,11 +258,50 @@ with col2:
                     if st.session_state.model_ready or "rkllm init success" in st.session_state.process_output:
                         st.subheader("💬 Chat Interface")
                         
-                        # Show status
+                        # Show detailed status
                         if st.session_state.model_ready:
                             st.success("🟢 Model is ready for questions!")
                         else:
-                            st.info("🟡 Model is loading... Please wait.")
+                            # Show detailed loading status
+                            with st.expander("🟡 Model is loading... Please wait. (Click to see details)", expanded=True):
+                                st.markdown("**Current Status:**")
+                                
+                                # Parse the output to show specific loading stages
+                                output_lines = st.session_state.process_output.split('\n')
+                                
+                                # Check for specific milestones
+                                milestones = {
+                                    "RKLLM Runtime": "rkllm-runtime version" in st.session_state.process_output,
+                                    "Model Loading": "loading rkllm model" in st.session_state.process_output,
+                                    "NPU Configuration": "npu_core_num" in st.session_state.process_output,
+                                    "CPU Configuration": "Enabled cpus" in st.session_state.process_output,
+                                    "RKLLM Init": "rkllm init success" in st.session_state.process_output,
+                                    "LLM Model": "LLM Model loaded" in st.session_state.process_output,
+                                    "Image Encoder": "ImgEnc Model loaded" in st.session_state.process_output,
+                                    "Chat Template": "reset chat template" in st.session_state.process_output,
+                                    "Ready for Input": "You can enter the following question numbers" in st.session_state.process_output
+                                }
+                                
+                                # Display milestone progress
+                                for milestone, completed in milestones.items():
+                                    if completed:
+                                        st.markdown(f"✅ {milestone}")
+                                    else:
+                                        st.markdown(f"⏳ {milestone}")
+                                
+                                # Show recent output lines
+                                st.markdown("**Recent Output:**")
+                                recent_lines = [line for line in output_lines[-10:] if line.strip()]
+                                for line in recent_lines:
+                                    if line.strip():
+                                        st.code(line, language="text")
+                                
+                                # Show timing information if available
+                                timing_lines = [line for line in output_lines if "ms" in line and "loaded" in line]
+                                if timing_lines:
+                                    st.markdown("**Loading Times:**")
+                                    for timing in timing_lines:
+                                        st.markdown(f"⏱️ {timing.strip()}")
                         
                         # Quick question buttons
                         col_q1, col_q2 = st.columns(2)
