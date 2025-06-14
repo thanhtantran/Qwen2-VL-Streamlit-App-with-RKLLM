@@ -26,13 +26,6 @@ with col_title:
 with col_logo:
     # Orange Pi Vietnam logo
     st.image("https://orangepi.vn/wp-content/uploads/2018/05/logo1-1.png", width=120)
-    st.markdown("""
-    <div style="text-align: right; padding-top: 20px;">
-        <a href="https://orangepi.vn" target="_blank">
-            <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjgwIiB2aWV3Qm94PSIwIDAgMTIwIDgwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8Y2lyY2xlIGN4PSIyNSIgY3k9IjI1IiByPSIyMCIgZmlsbD0iI0ZGQTUwMCIvPgo8cGF0aCBkPSJNMTUgMjVMMzUgMjUiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSIyIi8+CjxwYXRoIGQ9Ik0yNSAxNUwyNSAzNSIgc3Ryb2tlPSIjRkZGRkZGIiBzdHJva2Utd2lkdGg9IjIiLz4KPHN0YXIgY3g9IjkwIiBjeT0iNDAiIHI9IjEwIiBmaWxsPSIjRkYwMDAwIi8+Cjx0ZXh0IHg9IjUwIiB5PSIzNSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmaWxsPSIjMzMzMzMzIj5PcmFuZ2UgUGk8L3RleHQ+Cjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjEyIiBmaWxsPSIjNjY2NjY2Ij5WaWV0bmFtPC90ZXh0Pgo8L3N2Zz4K" alt="Orange Pi Vietnam" style="height: 60px;">
-        </a>
-    </div>
-    """, unsafe_allow_html=True)
 
 # Sidebar for configuration
 st.sidebar.header("⚙️ Configuration")
@@ -239,8 +232,8 @@ with col2:
                             if line:
                                 st.session_state.process_output += line
                                 # Check if model is ready based on the question prompt
-                                if ("You can enter the following question numbers" in line or 
-                                    "*************************************************************************" in st.session_state.process_output) and not st.session_state.model_ready:
+                                if ("You can enter the following question numbers to get answers" in st.session_state.process_output and 
+                                    not st.session_state.model_ready):
                                     st.session_state.model_ready = True
                     else:
                         # Windows fallback - check periodically
@@ -255,20 +248,10 @@ with col2:
                             disabled=True
                         )
                     
-                    # Show chat interface when model is ready or always show if process is running
-                    if st.session_state.model_ready or "rkllm init success" in st.session_state.process_output:
+                    # Show chat interface when model is ready
+                    if st.session_state.model_ready:
                         st.subheader("💬 Chat Interface")
-                        
-                        # Show detailed status
-                        # Check model readiness
-                        if ("**********************You can enter the following question numbers" in st.session_state.process_output) and not st.session_state.model_ready:
-                            st.session_state.model_ready = True
-                        
-                        # Simple status display
-                        if st.session_state.model_ready:
-                            st.success("🟢 Model is ready for questions!")
-                        else:
-                            st.info("🟡 Model is loading... Please wait.")
+                        st.success("🟢 Model is ready for questions!")
                         
                         # Quick question buttons
                         col_q1, col_q2 = st.columns(2)
@@ -305,7 +288,6 @@ with col2:
                                 st.session_state.chat_process.stdin.write(f"{user_input}\n")
                                 st.session_state.chat_process.stdin.flush()
                                 st.session_state.chat_history.append(f"User: {user_input}")
-                                # Clear the input by rerunning
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error sending input: {e}")
@@ -318,6 +300,9 @@ with col2:
                                     st.markdown(f"**{message}**")
                                 else:
                                     st.markdown(message)
+                    elif "rkllm init success" in st.session_state.process_output:
+                        st.subheader("💬 Chat Interface")
+                        st.info("🟡 Model is loading... Please wait.")
                     
                     # Auto-refresh every 2 seconds when process is running
                     time.sleep(2)
@@ -352,4 +337,4 @@ st.markdown("""
 
 # Copyright footer
 st.markdown("---")
-st.markdown("© 2025 Copyright by [Orange Pi Vietnam](https://orangepi.vn)", unsafe_allow_html=False)
+st.markdown("© 2025 Copyright by [Orange Pi Vietnam](https://orangepi.vn)")
