@@ -1,5 +1,5 @@
 import streamlit as st
-import subprocess
+import pexpect
 import os
 from pathlib import Path
 from PIL import Image
@@ -55,273 +55,245 @@ if models_dir.exists():
                 llm_model = str(file)
         
         if vision_model and llm_model:
-            st.sidebar.success(f"✅ Model found: {selected_model}")
-            st.sidebar.text(f"Vision: {Path(vision_model).name}")
-            st.sidebar.text(f"LLM: {Path(llm_model).name}")
+            st.sidebar.success(f"✅ Model loaded: {selected_model}")
+            st.sidebar.write(f"Vision: {Path(vision_model).name}")
+            st.sidebar.write(f"LLM: {Path(llm_model).name}")
         else:
             st.sidebar.error("❌ Model files not found")
+            st.sidebar.write("Required: .rknn and .rkllm files")
     else:
-        st.sidebar.error("❌ No model folders found")
+        st.sidebar.warning("⚠️ No model folders found in 'models' directory")
 else:
-    st.sidebar.error("❌ Models directory not found")
+    st.sidebar.error("❌ 'models' directory not found")
 
 # Parameters configuration
-st.sidebar.subheader("Model Parameters")
-
+st.sidebar.subheader("Parameters")
 max_new_tokens = st.sidebar.slider(
     "Max New Tokens",
     min_value=1,
     max_value=2048,
-    value=128,
-    step=1,
-    help="Maximum number of new tokens to generate (argument 4)"
-)
-
-max_context_len = st.sidebar.slider(
-    "Max Context Length",
-    min_value=1,
-    max_value=4096,
     value=512,
-    step=1,
-    help="Maximum context length for the model (argument 5)"
+    help="Maximum number of tokens to generate"
 )
 
-core_num = st.sidebar.selectbox(
+max_context_length = st.sidebar.slider(
+    "Max Context Length",
+    min_value=512,
+    max_value=8192,
+    value=4096,
+    help="Maximum context length for the model"
+)
+
+npu_core_num = st.sidebar.selectbox(
     "NPU Core Configuration",
     options=[1, 2, 3],
-    index=2,  # Default to 3
-    help="Number of NPU cores to use:\n- 1: Single core (AUTO)\n- 2: Dual core (0+1)\n- 3: Triple core (0+1+2)"
+    index=0,
+    help="Number of NPU cores to use (1=AUTO, 2=cores 0+1, 3=cores 0+1+2)"
 )
 
 # Main content area
-col1, col2 = st.columns([1, 1])
+st.header("📸 Image Input")
 
-with col1:
-    st.subheader("📷 Image Input")
+# Image upload
+uploaded_file = st.file_uploader(
+    "Choose an image file",
+    type=['png', 'jpg', 'jpeg'],
+    help="Upload an image for the model to analyze"
+)
+
+image_path = None
+if uploaded_file is not None:
+    # Save uploaded file
+    image_path = f"temp_{uploaded_file.name}"
+    with open(image_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
     
-    # Image upload
-    uploaded_file = st.file_uploader(
-        "Choose an image file",
-        type=['jpg', 'jpeg', 'png', 'bmp'],
-        help="Upload an image for the model to analyze"
-    )
-    
-    # Option to use demo image
-    use_demo = st.checkbox("Use demo image (./data/demo.jpg)", value=True)
-    
-    if uploaded_file is not None:
-        # Display uploaded image
-        image = Image.open(uploaded_file)
-        st.image(image, caption="Uploaded Image", use_container_width=True)
-        
-        # Save uploaded file to data folder with datetime name
-        data_dir = Path("data")
-        data_dir.mkdir(exist_ok=True)
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_extension = uploaded_file.name.split('.')[-1]
-        filename = f"{timestamp}.{file_extension}"
-        image_path = data_dir / filename
-        
-        with open(image_path, "wb") as f:
-            f.write(uploaded_file.getvalue())
-        
-        image_path = str(image_path)
-    elif use_demo and Path("data/demo.jpg").exists():
-        # Use demo image
-        image_path = "./data/demo.jpg"
-        demo_image = Image.open(image_path)
-        st.image(demo_image, caption="Demo Image", use_container_width=True)
+    # Display image
+    image = Image.open(image_path)
+    st.image(image, caption="Uploaded Image", use_column_width=True)
+    st.success(f"✅ Image uploaded: {uploaded_file.name}")
+else:
+    # Use demo image if available
+    demo_path = Path("data/demo.jpg")
+    if demo_path.exists():
+        image_path = str(demo_path)
+        image = Image.open(image_path)
+        st.image(image, caption="Demo Image (data/demo.jpg)", use_column_width=True)
+        st.info("ℹ️ Using demo image. Upload your own image above to replace it.")
     else:
-        image_path = None
-        st.info("Please upload an image or use the demo image.")
+        st.warning("⚠️ No image uploaded and demo image not found")
 
-with col2:
-    st.subheader("🚀 Inference")
+# Inference section
+st.header("🚀 Inference")
+
+# Check if all requirements are met
+if (image_path is not None and 
+    'vision_model' in locals() and vision_model is not None and 
+    'llm_model' in locals() and llm_model is not None and 
+    Path("app/build/app").exists()):
     
-    # Check if all requirements are met
-    can_run = (
-        image_path is not None and
-        'vision_model' in locals() and vision_model is not None and
-        'llm_model' in locals() and llm_model is not None and
-        Path("app/build/app").exists()
-    )
+    # Build command
+    command = [
+        "./app/build/app",
+        vision_model,
+        llm_model,
+        image_path,
+        str(max_new_tokens),
+        str(max_context_length),
+        str(npu_core_num)
+    ]
     
-    if can_run:
-        st.success("✅ Ready to run inference")
+    st.write(f"**Command:** `{' '.join(command)}`")
+    
+    # Initialize session state
+    if 'chat_process' not in st.session_state:
+        st.session_state.chat_process = None
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+    if 'process_output' not in st.session_state:
+        st.session_state.process_output = ""
+    if 'model_ready' not in st.session_state:
+        st.session_state.model_ready = False
         
-        # Display command that will be executed
-        command = [
-            "./app/build/app",
-            image_path,
-            vision_model,
-            llm_model,
-            str(max_new_tokens),
-            str(max_context_len),
-            str(core_num)
-        ]
-        
-        st.code(" ".join(command), language="bash")
-        
-        # Initialize session state for chat
-        if 'chat_process' not in st.session_state:
-            st.session_state.chat_process = None
-        if 'chat_history' not in st.session_state:
-            st.session_state.chat_history = []
-        if 'process_output' not in st.session_state:
-            st.session_state.process_output = ""
-        if 'model_ready' not in st.session_state:
-            st.session_state.model_ready = False
-            
-        # Start inference button
-        if st.button("🔥 Start Interactive Chat", type="primary", use_container_width=True):
-            if st.session_state.chat_process is None:
-                try:
-                    # Start the process
-                    st.session_state.chat_process = subprocess.Popen(
-                        command,
-                        stdin=subprocess.PIPE,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=True,
-                        bufsize=1,
-                        universal_newlines=True
-                    )
-                    st.session_state.model_ready = False
-                    st.session_state.process_output = ""
-                    st.session_state.chat_history = []
-                    st.success("✅ Starting inference process...")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Error starting process: {str(e)}")
-        
-        # Stop inference button
-        if st.session_state.chat_process is not None:
-            if st.button("🛑 Stop Chat", type="secondary", use_container_width=True):
-                try:
-                    st.session_state.chat_process.terminate()
-                    st.session_state.chat_process.wait(timeout=5)
-                except:
-                    st.session_state.chat_process.kill()
-                finally:
-                    st.session_state.chat_process = None
-                    st.session_state.model_ready = False
-                    st.session_state.process_output = ""
-                    st.success("✅ Chat stopped")
-                    st.rerun()
-        
-        # Monitor process output
-        if st.session_state.chat_process is not None:
+    # Start inference button
+    if st.button("🔥 Start Interactive Chat", type="primary", use_container_width=True):
+        if st.session_state.chat_process is None:
             try:
-                # Check if process is still running
-                if st.session_state.chat_process.poll() is not None:
-                    st.error("❌ Process has terminated")
+                # Start the process with pexpect
+                st.session_state.chat_process = pexpect.spawn(
+                    ' '.join(command),
+                    timeout=None,
+                    encoding='utf-8'
+                )
+                st.session_state.model_ready = False
+                st.session_state.process_output = ""
+                st.session_state.chat_history = []
+                st.success("✅ Starting inference process...")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Error starting process: {str(e)}")
+    
+    # Stop inference button
+    if st.session_state.chat_process is not None:
+        if st.button("🛑 Stop Chat", type="secondary", use_container_width=True):
+            try:
+                st.session_state.chat_process.terminate(force=True)
+                st.session_state.chat_process.close()
+            except:
+                pass
+            finally:
+                st.session_state.chat_process = None
+                st.session_state.model_ready = False
+                st.session_state.process_output = ""
+                st.success("✅ Chat stopped")
+                st.rerun()
+    
+    # Monitor process output
+    if st.session_state.chat_process is not None:
+        try:
+            # Check if process is still running
+            if not st.session_state.chat_process.isalive():
+                st.error("❌ Process has terminated")
+                st.session_state.chat_process = None
+                st.session_state.model_ready = False
+                st.rerun()
+            else:
+                # Read available output with pexpect
+                try:
+                    # Read with a short timeout to avoid blocking
+                    output = st.session_state.chat_process.read_nonblocking(size=1000, timeout=0.1)
+                    if output:
+                        st.session_state.process_output += output
+                        # Check if model is ready - look for "user:" prompt at the end
+                        if (st.session_state.process_output.strip().endswith("user:") and 
+                            not st.session_state.model_ready):
+                            st.session_state.model_ready = True
+                except pexpect.TIMEOUT:
+                    # No output available, continue
+                    pass
+                except pexpect.EOF:
+                    # Process ended
+                    st.error("❌ Process has ended")
                     st.session_state.chat_process = None
                     st.session_state.model_ready = False
                     st.rerun()
-                else:
-                    # Read available output (Linux/Unix systems)
-                    import select
                     
-                    ready, _, _ = select.select([st.session_state.chat_process.stdout], [], [], 0.1)
-                    if ready:
-                        line = st.session_state.chat_process.stdout.readline()
-                        if line:
-                            st.session_state.process_output += line
-                            # Check if model is ready - look for "user:" prompt at the end
-                            if (st.session_state.process_output.strip().endswith("user:") and 
-                                not st.session_state.model_ready):
-                                st.session_state.model_ready = True
-                    else:
-                        # Fallback - check periodically
-                        time.sleep(0.1)
-                        
-                    # Display current output
-                    if st.session_state.process_output:
-                        st.text_area(
-                            "📟 Process Output:",
-                            value=st.session_state.process_output,
-                            height=300,
-                            disabled=True
-                        )
+                # Display current output
+                if st.session_state.process_output:
+                    st.text_area(
+                        "📟 Process Output:",
+                        value=st.session_state.process_output,
+                        height=300,
+                        disabled=True
+                    )
+                
+                # Show chat interface when model is ready
+                if st.session_state.model_ready:
+                    st.subheader("💬 Chat Interface")
+                    st.success("🟢 Model is ready for questions!")
                     
-                    # Show chat interface when model is ready
-                    if st.session_state.model_ready:
-                        st.subheader("💬 Chat Interface")
-                        st.success("🟢 Model is ready for questions!")
-                        
-                        # Quick question buttons
-                        col_q1, col_q2 = st.columns(2)
-                        with col_q1:
-                            if st.button("❓ What is in the image?"):
-                                try:
-                                    st.session_state.chat_process.stdin.write("0\n")
-                                    st.session_state.chat_process.stdin.flush()
-                                    st.session_state.chat_history.append("User: [0] What is in the image?")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"Error sending input: {e}")
-                        
-                        with col_q2:
-                            if st.button("🌐 Trong bức ảnh có gì?"):
-                                try:
-                                    st.session_state.chat_process.stdin.write("1\n")
-                                    st.session_state.chat_process.stdin.flush()
-                                    st.session_state.chat_history.append("User: [1] Trong bức ảnh có gì?")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"Error sending input: {e}")
-                        
-                        # Custom input
-                        user_input = st.text_input(
-                            "💭 Or enter your custom question:",
-                            placeholder="Type your question here...",
-                            key="user_question"
-                        )
-                        
-                        if st.button("📤 Send Custom Question") and user_input:
+                    # Quick question buttons
+                    col_q1, col_q2 = st.columns(2)
+                    with col_q1:
+                        if st.button("❓ What is in the image?"):
                             try:
-                                st.session_state.chat_process.stdin.write(f"{user_input}\n")
-                                st.session_state.chat_process.stdin.flush()
-                                st.session_state.chat_history.append(f"User: {user_input}")
+                                st.session_state.chat_process.sendline("0")
+                                st.session_state.chat_history.append("User: [0] What is in the image?")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error sending input: {e}")
-                        
-                        # Display chat history
-                        if st.session_state.chat_history:
-                            st.subheader("📜 Chat History")
-                            for message in st.session_state.chat_history:
-                                if message.startswith("User:"):
-                                    st.markdown(f"**{message}**")
-                                else:
-                                    st.markdown(message)
-                    else:
-                        # Show loading status
-                        st.subheader("💬 Chat Interface")
-                        if "rkllm init success" in st.session_state.process_output:
-                            st.info("🟡 Model is loading... Please wait for initialization to complete.")
-                        else:
-                            st.info("🟡 Starting model... Please wait.")
                     
-                    # Auto-refresh every 2 seconds when process is running
-                    time.sleep(2)
-                    st.rerun()
+                    with col_q2:
+                        if st.button("🌐 Trong bức ảnh có gì?"):
+                            try:
+                                st.session_state.chat_process.sendline("1")
+                                st.session_state.chat_history.append("User: [1] Trong bức ảnh có gì?")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error sending input: {e}")
                     
-            except Exception as e:
-                st.error(f"❌ Error monitoring process: {str(e)}")
-                st.session_state.chat_process = None
-                st.session_state.model_ready = False
-    else:
-        st.warning("⚠️ Requirements not met:")
-        if image_path is None:
-            st.write("- No image selected")
-        if 'vision_model' not in locals() or vision_model is None:
-            st.write("- Vision model not found")
-        if 'llm_model' not in locals() or llm_model is None:
-            st.write("- LLM model not found")
-        if not Path("app/build/app").exists():
-            st.write("- App executable not found (./app/build/app)")
+                    # Custom input
+                    user_input = st.text_input(
+                        "💭 Or enter your custom question:",
+                        placeholder="Type your question here...",
+                        key="user_question"
+                    )
+                    
+                    if st.button("📤 Send Custom Question") and user_input:
+                        try:
+                            st.session_state.chat_process.sendline(user_input)
+                            st.session_state.chat_history.append(f"User: {user_input}")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error sending input: {e}")
+                    
+                    # Display chat history
+                    if st.session_state.chat_history:
+                        st.subheader("📜 Chat History")
+                        for message in st.session_state.chat_history:
+                            if message.startswith("User:"):
+                                st.markdown(f"**{message}**")
+                            else:
+                                st.markdown(message)
+                
+                # Auto-refresh every 2 seconds when process is running
+                time.sleep(2)
+                st.rerun()
+                
+        except Exception as e:
+            st.error(f"❌ Error monitoring process: {str(e)}")
+            st.session_state.chat_process = None
+            st.session_state.model_ready = False
+else:
+    st.warning("⚠️ Requirements not met:")
+    if image_path is None:
+        st.write("- No image selected")
+    if 'vision_model' not in locals() or vision_model is None:
+        st.write("- Vision model not found")
+    if 'llm_model' not in locals() or llm_model is None:
+        st.write("- LLM model not found")
+    if not Path("app/build/app").exists():
+        st.write("- App executable not found (./app/build/app)")
 
 # Footer with information
 st.markdown("---")
