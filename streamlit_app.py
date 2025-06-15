@@ -220,23 +220,20 @@ with col2:
                     st.session_state.model_ready = False
                     st.rerun()
                 else:
-                    # Read available output
+                    # Read available output (Linux/Unix systems)
                     import select
-                    import sys
                     
-                    # For Windows compatibility, use a different approach
-                    if hasattr(select, 'select'):
-                        ready, _, _ = select.select([st.session_state.chat_process.stdout], [], [], 0.1)
-                        if ready:
-                            line = st.session_state.chat_process.stdout.readline()
-                            if line:
-                                st.session_state.process_output += line
-                                # Check if model is ready based on the question prompt
-                                if ("You can enter the following question numbers to get answers" in st.session_state.process_output and 
-                                    not st.session_state.model_ready):
-                                    st.session_state.model_ready = True
+                    ready, _, _ = select.select([st.session_state.chat_process.stdout], [], [], 0.1)
+                    if ready:
+                        line = st.session_state.chat_process.stdout.readline()
+                        if line:
+                            st.session_state.process_output += line
+                            # Check if model is ready - look for "user:" prompt at the end
+                            if (st.session_state.process_output.strip().endswith("user:") and 
+                                not st.session_state.model_ready):
+                                st.session_state.model_ready = True
                     else:
-                        # Windows fallback - check periodically
+                        # Fallback - check periodically
                         time.sleep(0.1)
                         
                     # Display current output
@@ -256,7 +253,7 @@ with col2:
                         # Quick question buttons
                         col_q1, col_q2 = st.columns(2)
                         with col_q1:
-                            if st.button("❓ What is in the image?", disabled=not st.session_state.model_ready):
+                            if st.button("❓ What is in the image?"):
                                 try:
                                     st.session_state.chat_process.stdin.write("0\n")
                                     st.session_state.chat_process.stdin.flush()
@@ -266,7 +263,7 @@ with col2:
                                     st.error(f"Error sending input: {e}")
                         
                         with col_q2:
-                            if st.button("🌐 Trong bức ảnh có gì?", disabled=not st.session_state.model_ready):
+                            if st.button("🌐 Trong bức ảnh có gì?"):
                                 try:
                                     st.session_state.chat_process.stdin.write("1\n")
                                     st.session_state.chat_process.stdin.flush()
@@ -279,11 +276,10 @@ with col2:
                         user_input = st.text_input(
                             "💭 Or enter your custom question:",
                             placeholder="Type your question here...",
-                            key="user_question",
-                            disabled=not st.session_state.model_ready
+                            key="user_question"
                         )
                         
-                        if st.button("📤 Send Custom Question", disabled=not st.session_state.model_ready or not user_input) and user_input:
+                        if st.button("📤 Send Custom Question") and user_input:
                             try:
                                 st.session_state.chat_process.stdin.write(f"{user_input}\n")
                                 st.session_state.chat_process.stdin.flush()
@@ -300,9 +296,13 @@ with col2:
                                     st.markdown(f"**{message}**")
                                 else:
                                     st.markdown(message)
-                    elif "rkllm init success" in st.session_state.process_output:
+                    else:
+                        # Show loading status
                         st.subheader("💬 Chat Interface")
-                        st.info("🟡 Model is loading... Please wait.")
+                        if "rkllm init success" in st.session_state.process_output:
+                            st.info("🟡 Model is loading... Please wait for initialization to complete.")
+                        else:
+                            st.info("🟡 Starting model... Please wait.")
                     
                     # Auto-refresh every 2 seconds when process is running
                     time.sleep(2)
