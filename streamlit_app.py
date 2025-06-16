@@ -1,5 +1,6 @@
 import streamlit as st
 import subprocess
+import fcntl
 import os
 from pathlib import Path
 from PIL import Image
@@ -220,22 +221,24 @@ with col2:
                     st.session_state.model_ready = False
                     st.rerun()
                 else:
-                    # Read available output (Linux/Unix systems)
-                    import select
-                    
-                    ready, _, _ = select.select([st.session_state.chat_process.stdout], [], [], 0.1)
-                    if ready:
-                        line = st.session_state.chat_process.stdout.readline()
-                        if line:
+                    # Simple output reading approach
+                    try:
+                        # Read available output line by line
+                        while True:
+                            line = st.session_state.chat_process.stdout.readline()
+                            if not line:
+                                break
                             st.session_state.process_output += line
-                            # Check if model is ready - look for "user:" prompt at the end
+                            
+                            # Check if model is ready - look for "user:" at the end of output
                             if (st.session_state.process_output.strip().endswith("user:") and 
                                 not st.session_state.model_ready):
                                 st.session_state.model_ready = True
-                    else:
-                        # Fallback - check periodically
-                        time.sleep(0.1)
-                        
+                                
+                    except:
+                        # Continue if no output available
+                        pass
+                            
                     # Display current output
                     if st.session_state.process_output:
                         st.text_area(
@@ -244,6 +247,9 @@ with col2:
                             height=300,
                             disabled=True
                         )
+                    # Show loading status
+                    if not st.session_state.model_ready:
+                        st.info("🔄 Model is loading... Please wait for the 'user:' prompt.")
                     
                     # Show chat interface when model is ready
                     if st.session_state.model_ready:
@@ -296,13 +302,6 @@ with col2:
                                     st.markdown(f"**{message}**")
                                 else:
                                     st.markdown(message)
-                    else:
-                        # Show loading status
-                        st.subheader("💬 Chat Interface")
-                        if "rkllm init success" in st.session_state.process_output:
-                            st.info("🟡 Model is loading... Please wait for initialization to complete.")
-                        else:
-                            st.info("🟡 Starting model... Please wait.")
                     
                     # Auto-refresh every 2 seconds when process is running
                     time.sleep(2)
