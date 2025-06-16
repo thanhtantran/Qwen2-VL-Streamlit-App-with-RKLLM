@@ -115,15 +115,15 @@ The web app translates the UI inputs into this command:
 Qwen2-VL-Streamlit-App-with-RKLLM/
 ├── streamlit_app.py          # Main Streamlit application
 ├── requirements.txt          # Python dependencies
-├── README_STREAMLIT.md      # This file
+├── README.md      # This file
 ├── app/
 │   ├── build/
 │   │   └── app              # Built C executable
 │   └── ...
 ├── models/
 │   └── Qwen2-VL-2B-RKLLM/
-│       ├── *.rknn           # Vision model
-│       └── *.rkllm          # Language model
+│       ├── Qwen2-VL-2B-Instruct.rknn           # Vision model
+│       └── Qwen2-VL-2B-Instruct.rkllm          # Language model
 └── data/
     └── demo.jpg             # Demo image
 ```
