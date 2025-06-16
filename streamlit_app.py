@@ -283,7 +283,7 @@ if (image_path is not None and
                 st.session_state.process_output += line
                 
                 # Check if model is ready
-                if (st.session_state.process_output.strip().endswith("user:") and 
+                if (st.session_state.process_output.strip().endswith("*************************************************************************") and 
                     not st.session_state.model_ready):
                     st.session_state.model_ready = True
         
@@ -299,7 +299,7 @@ if (image_path is not None and
         
         # Show status
         if not st.session_state.model_ready:
-            st.info("🔄 Model is loading... Please wait for the 'user:' prompt.")
+            st.info("🔄 Model is loading... Please wait for the user prompt.")
         else:
             st.success("🟢 Model is ready for questions!")
             
