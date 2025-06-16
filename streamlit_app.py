@@ -343,6 +343,8 @@ if (image_path is not None and
                 for message in st.session_state.chat_history:
                     if message.startswith("User:"):
                         st.markdown(f"**{message}**")
+                    elif message.startswith("Robot:"):
+                        st.markdown(f"*{message}*")
                     else:
                         st.markdown(message)
         
