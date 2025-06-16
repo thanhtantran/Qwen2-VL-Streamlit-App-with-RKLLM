@@ -124,6 +124,11 @@ if 'last_robot_response' not in st.session_state:
     st.session_state.last_robot_response = ""
 if 'waiting_for_response' not in st.session_state:
     st.session_state.waiting_for_response = False
+# Add to session state initialization
+if 'last_output_time' not in st.session_state:
+    st.session_state.last_output_time = time.time()
+if 'response_timeout' not in st.session_state:
+    st.session_state.response_timeout = 3.0  # 3 seconds timeout    
 
 # Header with logo
 col_title, col_logo = st.columns([3, 1])
@@ -290,11 +295,13 @@ if (image_path is not None and
                 if (st.session_state.process_output.strip().endswith("*************************************************************************") and 
                     not st.session_state.model_ready):
                     st.session_state.model_ready = True
+                
                 # Capture robot responses for chat history
                 if "robot:" in line and st.session_state.waiting_for_response:
                     # Start capturing robot response
                     robot_response = line.split("robot:", 1)[1].strip()
                     st.session_state.last_robot_response = robot_response
+                    st.session_state.last_output_time = time.time()
                 elif st.session_state.waiting_for_response and st.session_state.last_robot_response:
                     # Continue capturing multi-line robot response
                     if "user:" in line:
@@ -302,9 +309,41 @@ if (image_path is not None and
                         st.session_state.chat_history.append(f"Robot: {st.session_state.last_robot_response}")
                         st.session_state.last_robot_response = ""
                         st.session_state.waiting_for_response = False
-                    else:
-                        # Continue building robot response
-                        st.session_state.last_robot_response += " " + line.strip()                    
+                    elif line.strip() and not line.strip().startswith("robot:"):
+                        # Continue building robot response (only non-empty lines)
+                        if st.session_state.last_robot_response:
+                            st.session_state.last_robot_response += " " + line.strip()
+                        else:
+                            st.session_state.last_robot_response = line.strip()
+                        st.session_state.last_output_time = time.time()
+            
+            # Check for timeout - if no new output for 3 seconds and we have a response, add it to history
+            current_time = time.time()
+            if (st.session_state.waiting_for_response and 
+                st.session_state.last_robot_response and 
+                current_time - st.session_state.last_output_time > st.session_state.response_timeout):
+                st.session_state.chat_history.append(f"Robot: {st.session_state.last_robot_response}")
+                st.session_state.last_robot_response = ""
+                st.session_state.waiting_for_response = False
+        
+        # Display process output with auto-scroll
+        if st.session_state.process_output:
+            # Get the last 2000 characters for display
+            display_output = st.session_state.process_output[-2000:] if len(st.session_state.process_output) > 2000 else st.session_state.process_output
+            
+            # Use a container with custom CSS to auto-scroll
+            with st.container():
+                st.markdown("📟 **Process Output:**")
+                # Create a scrollable text area that shows the latest content
+                output_container = st.empty()
+                with output_container.container():
+                    st.text_area(
+                        "",
+                        value=display_output,
+                        height=300,
+                        disabled=True,
+                        key=f"process_output_{len(st.session_state.process_output)}"  # Force refresh with new key
+                    )                 
         
         # Display process output
         if st.session_state.process_output:
