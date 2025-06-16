@@ -1,3 +1,5 @@
+[🇻🇳 Xem bản tiếng Việt](README-VIE.md)
+
 # Qwen2-VL RKLLM Streamlit Web App
 
 This Streamlit web application provides a user-friendly interface for running Qwen2-VL model inference using RKLLM runtime.
