@@ -192,7 +192,7 @@ max_context_length = st.sidebar.slider(
 npu_core_num = st.sidebar.selectbox(
     "NPU Core Configuration",
     options=[1, 2, 3],
-    index=0,
+    index=2,
     help="Number of NPU cores to use (1=AUTO, 2=cores 0+1, 3=cores 0+1+2)"
 )
 
@@ -240,9 +240,9 @@ if (image_path is not None and
     # Build command
     command = [
         "./app/build/app",
+        image_path,        
         vision_model,
         llm_model,
-        image_path,
         str(max_new_tokens),
         str(max_context_length),
         str(npu_core_num)
