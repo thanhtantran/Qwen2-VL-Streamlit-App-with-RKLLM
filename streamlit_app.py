@@ -18,6 +18,109 @@ st.set_page_config(
     layout="wide"
 )
 
+class ProcessManager:
+    def __init__(self):
+        self.process = None
+        self.output_queue = queue.Queue()
+        self.input_queue = queue.Queue()
+        self.output_thread = None
+        self.input_thread = None
+        self.running = False
+        
+    def start_process(self, command):
+        try:
+            self.process = subprocess.Popen(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+            self.running = True
+            
+            # Start output reading thread
+            self.output_thread = threading.Thread(target=self._read_output, daemon=True)
+            self.output_thread.start()
+            
+            # Start input writing thread
+            self.input_thread = threading.Thread(target=self._write_input, daemon=True)
+            self.input_thread.start()
+            
+            return True
+        except Exception as e:
+            st.error(f"Failed to start process: {e}")
+            return False
+    
+    def _read_output(self):
+        """Read process output in separate thread"""
+        try:
+            while self.running and self.process and self.process.poll() is None:
+                line = self.process.stdout.readline()
+                if line:
+                    self.output_queue.put(line)
+                else:
+                    time.sleep(0.1)
+        except Exception as e:
+            self.output_queue.put(f"Error reading output: {e}\n")
+        finally:
+            self.running = False
+    
+    def _write_input(self):
+        """Write input to process in separate thread"""
+        try:
+            while self.running and self.process and self.process.poll() is None:
+                try:
+                    command = self.input_queue.get(timeout=0.1)
+                    if command:
+                        self.process.stdin.write(command + "\n")
+                        self.process.stdin.flush()
+                except queue.Empty:
+                    continue
+                except Exception as e:
+                    st.error(f"Error writing input: {e}")
+                    break
+        except Exception as e:
+            st.error(f"Input thread error: {e}")
+    
+    def send_command(self, command):
+        """Send command to process"""
+        if self.running:
+            self.input_queue.put(command)
+    
+    def get_output(self):
+        """Get all available output"""
+        output_lines = []
+        try:
+            while True:
+                line = self.output_queue.get_nowait()
+                output_lines.append(line)
+        except queue.Empty:
+            pass
+        return output_lines
+    
+    def is_running(self):
+        """Check if process is still running"""
+        return self.running and self.process and self.process.poll() is None
+    
+    def stop(self):
+        """Stop the process"""
+        self.running = False
+        if self.process:
+            self.process.terminate()
+            self.process = None
+
+# Initialize process manager in session state
+if 'process_manager' not in st.session_state:
+    st.session_state.process_manager = ProcessManager()
+if 'process_output' not in st.session_state:
+    st.session_state.process_output = ""
+if 'model_ready' not in st.session_state:
+    st.session_state.model_ready = False
+if 'chat_history' not in st.session_state:
+    st.session_state.chat_history = []
+
 # Header with logo
 col_title, col_logo = st.columns([3, 1])
 with col_title:
@@ -27,7 +130,6 @@ with col_title:
     Upload an image and configure the model parameters to get AI-generated responses.
     """)
 with col_logo:
-    # Orange Pi Vietnam logo
     st.image("https://orangepi.vn/wp-content/uploads/2018/05/logo1-1.png", width=120)
 
 # Sidebar for configuration
@@ -148,137 +250,110 @@ if (image_path is not None and
     
     st.write(f"**Command:** `{' '.join(command)}`")
     
-    # Initialize session state
-    if 'chat_process' not in st.session_state:
-        st.session_state.chat_process = None
-    if 'chat_history' not in st.session_state:
-        st.session_state.chat_history = []
-    if 'process_output' not in st.session_state:
-        st.session_state.process_output = ""
-    if 'model_ready' not in st.session_state:
-        st.session_state.model_ready = False
-        
-    # Start inference button
-    if st.button("🔥 Start Interactive Chat", type="primary", use_container_width=True):
-        if st.session_state.chat_process is None:
-            try:
-                # Start the process
-                st.session_state.chat_process = subprocess.Popen(
-                    command,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    bufsize=1,
-                    universal_newlines=True
-                )
-                st.session_state.process_output = ""
-                st.session_state.model_ready = False
-                st.success("🚀 Process started!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"❌ Error starting process: {str(e)}")
+    # Control buttons
+    col1, col2 = st.columns(2)
     
-    # Monitor running process
-    if st.session_state.chat_process is not None:
-        try:
-            # Check if process is still running
-            if st.session_state.chat_process.poll() is not None:
-                st.error("❌ Process has terminated")
-                st.session_state.chat_process = None
-                st.session_state.model_ready = False
-                st.rerun()
+    with col1:
+        if st.button("🔥 Start Interactive Chat", type="primary", use_container_width=True):
+            if not st.session_state.process_manager.is_running():
+                if st.session_state.process_manager.start_process(command):
+                    st.session_state.process_output = ""
+                    st.session_state.model_ready = False
+                    st.session_state.chat_history = []
+                    st.success("🚀 Process started!")
+                    time.sleep(0.5)  # Give process time to start
+                    st.rerun()
             else:
-                # Read available output
-                try:
-                    # Use non-blocking read for Linux
-                    if select.select([st.session_state.chat_process.stdout], [], [], 0)[0]:
-                        line = st.session_state.chat_process.stdout.readline()
-                        if line:
-                            st.session_state.process_output += line
-                            
-                            # Check if model is ready
-                            if (st.session_state.process_output.strip().endswith("user:") and 
-                                not st.session_state.model_ready):
-                                st.session_state.model_ready = True
-                except Exception as read_error:
-                    # Continue if no output available
-                    pass
-                    
-                # Display current output
-                if st.session_state.process_output:
-                    display_output = st.session_state.process_output[-2000:] if len(st.session_state.process_output) > 2000 else st.session_state.process_output
-                    st.text_area(
-                        "📟 Process Output:",
-                        value=display_output,
-                        height=300,
-                        disabled=True
-                    )
-                
-                # Show loading status
-                if not st.session_state.model_ready:
-                    st.info("🔄 Model is loading... Please wait for the 'user:' prompt.")
-                
-                # Show chat interface when model is ready
-                if st.session_state.model_ready:
-                    st.subheader("💬 Chat Interface")
-                    st.success("🟢 Model is ready for questions!")
-                    
-                    # Quick question buttons
-                    col_q1, col_q2 = st.columns(2)
-                    with col_q1:
-                        if st.button("❓ What is in the image?"):
-                            try:
-                                st.session_state.chat_process.stdin.write("0\n")
-                                st.session_state.chat_process.stdin.flush()
-                                st.session_state.chat_history.append("User: [0] What is in the image?")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Error sending input: {e}")
-                    
-                    with col_q2:
-                        if st.button("🌐 Trong bức ảnh có gì?"):
-                            try:
-                                st.session_state.chat_process.stdin.write("1\n")
-                                st.session_state.chat_process.stdin.flush()
-                                st.session_state.chat_history.append("User: [1] Trong bức ảnh có gì?")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Error sending input: {e}")
-                    
-                    # Custom input
-                    user_input = st.text_input(
-                        "💭 Or enter your custom question:",
-                        placeholder="Type your question here...",
-                        key="user_question"
-                    )
-                    
-                    if st.button("📤 Send Custom Question") and user_input:
-                        try:
-                            st.session_state.chat_process.stdin.write(f"{user_input}\n")
-                            st.session_state.chat_process.stdin.flush()
-                            st.session_state.chat_history.append(f"User: {user_input}")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error sending input: {e}")
-                    
-                    # Display chat history
-                    if st.session_state.chat_history:
-                        st.subheader("📜 Chat History")
-                        for message in st.session_state.chat_history:
-                            if message.startswith("User:"):
-                                st.markdown(f"**{message}**")
-                            else:
-                                st.markdown(message)
-                
-                # Auto-refresh every 1 second when process is running
-                time.sleep(1)
+                st.warning("Process is already running!")
+    
+    with col2:
+        if st.button("🛑 Stop Process", type="secondary", use_container_width=True):
+            if st.session_state.process_manager.is_running():
+                st.session_state.process_manager.stop()
+                st.session_state.model_ready = False
+                st.success("Process stopped!")
                 st.rerun()
+    
+    # Monitor process output
+    if st.session_state.process_manager.is_running():
+        # Get new output
+        new_output = st.session_state.process_manager.get_output()
+        if new_output:
+            for line in new_output:
+                st.session_state.process_output += line
                 
-        except Exception as e:
-            st.error(f"❌ Error monitoring process: {str(e)}")
-            st.session_state.chat_process = None
-            st.session_state.model_ready = False
+                # Check if model is ready
+                if (st.session_state.process_output.strip().endswith("user:") and 
+                    not st.session_state.model_ready):
+                    st.session_state.model_ready = True
+        
+        # Display process output
+        if st.session_state.process_output:
+            display_output = st.session_state.process_output[-2000:] if len(st.session_state.process_output) > 2000 else st.session_state.process_output
+            st.text_area(
+                "📟 Process Output:",
+                value=display_output,
+                height=300,
+                disabled=True
+            )
+        
+        # Show status
+        if not st.session_state.model_ready:
+            st.info("🔄 Model is loading... Please wait for the 'user:' prompt.")
+        else:
+            st.success("🟢 Model is ready for questions!")
+            
+            # Chat interface
+            st.subheader("💬 Chat Interface")
+            
+            # Quick question buttons
+            col_q1, col_q2 = st.columns(2)
+            with col_q1:
+                if st.button("❓ What is in the image?"):
+                    st.session_state.process_manager.send_command("0")
+                    st.session_state.chat_history.append("User: [0] What is in the image?")
+                    st.rerun()
+            
+            with col_q2:
+                if st.button("🌐 Trong bức ảnh có gì?"):
+                    st.session_state.process_manager.send_command("1")
+                    st.session_state.chat_history.append("User: [1] Trong bức ảnh có gì?")
+                    st.rerun()
+            
+            # Custom input
+            user_input = st.text_input(
+                "💭 Or enter your custom question:",
+                placeholder="Type your question here...",
+                key="user_question"
+            )
+            
+            if st.button("📤 Send Custom Question") and user_input:
+                st.session_state.process_manager.send_command(user_input)
+                st.session_state.chat_history.append(f"User: {user_input}")
+                st.rerun()
+            
+            # Display chat history
+            if st.session_state.chat_history:
+                st.subheader("📜 Chat History")
+                for message in st.session_state.chat_history:
+                    if message.startswith("User:"):
+                        st.markdown(f"**{message}**")
+                    else:
+                        st.markdown(message)
+        
+        # Auto-refresh to get new output
+        time.sleep(1)
+        st.rerun()
+    
+    elif st.session_state.process_output:
+        # Show last output even if process stopped
+        st.text_area(
+            "📟 Process Output (Stopped):",
+            value=st.session_state.process_output[-2000:],
+            height=300,
+            disabled=True
+        )
+
 else:
     st.warning("⚠️ Requirements not met:")
     if image_path is None:
@@ -290,18 +365,6 @@ else:
     if not Path("app/build/app").exists():
         st.write("- App executable not found (./app/build/app)")
 
-# Footer with information
-st.markdown("---")
-st.markdown("""
-### 📋 Parameter Information:
-- **Max New Tokens**: Maximum number of tokens the model will generate
-- **Max Context Length**: Maximum length of the input context the model can process
-- **NPU Core Configuration**: Number of NPU cores to utilize for inference
-  - 1: Single core (AUTO mode)
-  - 2: Dual core (cores 0+1)
-  - 3: Triple core (cores 0+1+2)
-""")
-
-# Copyright footer
+# Footer
 st.markdown("---")
 st.markdown("© 2025 Copyright by [Orange Pi Vietnam](https://orangepi.vn)")
