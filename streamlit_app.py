@@ -164,6 +164,24 @@ if (image_path is not None and
     if st.button("🔥 Start Interactive Chat", type="primary", use_container_width=True):
         if st.session_state.chat_process is None:
             try:
+                # Start the process
+                st.session_state.chat_process = subprocess.Popen(
+                    command,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    universal_newlines=True
+                )
+                st.session_state.process_output = ""
+                st.session_state.model_ready = False
+                st.success("🚀 Process started!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Error starting process: {str(e)}")
+        else:
+            try:
                 # Check if process is still running
                 if st.session_state.chat_process.poll() is not None:
                     st.error("❌ Process has terminated")
@@ -171,35 +189,36 @@ if (image_path is not None and
                     st.session_state.model_ready = False
                     st.rerun()
                 else:
-                    # Simple output reading approach
+                    # Read available output
                     try:
-                        # Read available output line by line
-                        while True:
+                        # Use non-blocking read
+                        import select
+                        if select.select([st.session_state.chat_process.stdout], [], [], 0)[0]:
                             line = st.session_state.chat_process.stdout.readline()
-                            if not line:
-                                break
-                            st.session_state.process_output += line
-                            
-                            # Check if model is ready - look for "user:" at the end of output
-                            if (st.session_state.process_output.strip().endswith("user:") and 
-                                not st.session_state.model_ready):
-                                st.session_state.model_ready = True
+                            if line:
+                                st.session_state.process_output += line
                                 
-                    except:
+                                # Check if model is ready
+                                if (st.session_state.process_output.strip().endswith("user:") and 
+                                    not st.session_state.model_ready):
+                                    st.session_state.model_ready = True
+                    except Exception as read_error:
                         # Continue if no output available
                         pass
-                            
-                    # Display current output
-                    if st.session_state.process_output:
-                        st.text_area(
-                            "📟 Process Output:",
-                            value=st.session_state.process_output,
-                            height=300,
-                            disabled=True
-                        )
-                    # Show loading status
-                    if not st.session_state.model_ready:
-                        st.info("🔄 Model is loading... Please wait for the 'user:' prompt.")
+                        
+                # Display current output (remove duplicate)
+                if st.session_state.process_output:
+                    display_output = st.session_state.process_output[-2000:] if len(st.session_state.process_output) > 2000 else st.session_state.process_output
+                    st.text_area(
+                        "📟 Process Output:",
+                        value=display_output,
+                        height=300,
+                        disabled=True
+                    )
+                
+                # Show loading status
+                if not st.session_state.model_ready:
+                    st.info("🔄 Model is loading... Please wait for the 'user:' prompt.")
                     
                 # Display current output
                 if st.session_state.process_output:
@@ -215,7 +234,7 @@ if (image_path is not None and
                 # Show loading status
                 if not st.session_state.model_ready:
                     st.info("🔄 Model is loading... Please wait for the 'user:' prompt.")
-                
+                    
                 # Show chat interface when model is ready
                 if st.session_state.model_ready:
                     st.subheader("💬 Chat Interface")
