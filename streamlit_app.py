@@ -296,35 +296,13 @@ if (image_path is not None and
                     not st.session_state.model_ready):
                     st.session_state.model_ready = True
                 
-                # Capture robot responses for chat history
-                if "robot:" in line and st.session_state.waiting_for_response:
-                    # Start capturing robot response
+                # Simplified robot response capture
+                if "robot:" in line:
+                    # Extract and immediately add robot response
                     robot_response = line.split("robot:", 1)[1].strip()
-                    st.session_state.last_robot_response = robot_response
-                    st.session_state.last_output_time = time.time()
-                elif st.session_state.waiting_for_response and st.session_state.last_robot_response:
-                    # Continue capturing multi-line robot response
-                    if "user:" in line:
-                        # End of robot response, add to chat history
-                        st.session_state.chat_history.append(f"Robot: {st.session_state.last_robot_response}")
-                        st.session_state.last_robot_response = ""
+                    if robot_response and st.session_state.waiting_for_response:
+                        st.session_state.chat_history.append(f"Robot: {robot_response}")
                         st.session_state.waiting_for_response = False
-                    elif line.strip() and not line.strip().startswith("robot:"):
-                        # Continue building robot response (only non-empty lines)
-                        if st.session_state.last_robot_response:
-                            st.session_state.last_robot_response += " " + line.strip()
-                        else:
-                            st.session_state.last_robot_response = line.strip()
-                        st.session_state.last_output_time = time.time()
-            
-            # Check for timeout - if no new output for 3 seconds and we have a response, add it to history
-            current_time = time.time()
-            if (st.session_state.waiting_for_response and 
-                st.session_state.last_robot_response and 
-                current_time - st.session_state.last_output_time > st.session_state.response_timeout):
-                st.session_state.chat_history.append(f"Robot: {st.session_state.last_robot_response}")
-                st.session_state.last_robot_response = ""
-                st.session_state.waiting_for_response = False
         
         # Display process output with auto-scroll
         if st.session_state.process_output:
@@ -344,17 +322,7 @@ if (image_path is not None and
                         disabled=True,
                         key=f"process_output_{len(st.session_state.process_output)}"  # Force refresh with new key
                     )                 
-        
-        # Display process output
-        if st.session_state.process_output:
-            display_output = st.session_state.process_output[-2000:] if len(st.session_state.process_output) > 2000 else st.session_state.process_output
-            st.text_area(
-                "📟 Process Output:",
-                value=display_output,
-                height=300,
-                disabled=True
-            )
-        
+              
         # Show status
         if not st.session_state.model_ready:
             st.info("🔄 Model is loading... Please wait for the user prompt.")
