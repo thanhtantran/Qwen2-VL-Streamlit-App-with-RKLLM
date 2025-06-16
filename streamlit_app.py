@@ -120,6 +120,10 @@ if 'model_ready' not in st.session_state:
     st.session_state.model_ready = False
 if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
+if 'last_robot_response' not in st.session_state:
+    st.session_state.last_robot_response = ""
+if 'waiting_for_response' not in st.session_state:
+    st.session_state.waiting_for_response = False
 
 # Header with logo
 col_title, col_logo = st.columns([3, 1])
@@ -286,6 +290,21 @@ if (image_path is not None and
                 if (st.session_state.process_output.strip().endswith("*************************************************************************") and 
                     not st.session_state.model_ready):
                     st.session_state.model_ready = True
+                # Capture robot responses for chat history
+                if "robot:" in line and st.session_state.waiting_for_response:
+                    # Start capturing robot response
+                    robot_response = line.split("robot:", 1)[1].strip()
+                    st.session_state.last_robot_response = robot_response
+                elif st.session_state.waiting_for_response and st.session_state.last_robot_response:
+                    # Continue capturing multi-line robot response
+                    if "user:" in line:
+                        # End of robot response, add to chat history
+                        st.session_state.chat_history.append(f"Robot: {st.session_state.last_robot_response}")
+                        st.session_state.last_robot_response = ""
+                        st.session_state.waiting_for_response = False
+                    else:
+                        # Continue building robot response
+                        st.session_state.last_robot_response += " " + line.strip()                    
         
         # Display process output
         if st.session_state.process_output:
