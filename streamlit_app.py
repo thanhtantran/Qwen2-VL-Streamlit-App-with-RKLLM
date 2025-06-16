@@ -113,7 +113,7 @@ if uploaded_file is not None:
     
     # Display image
     image = Image.open(image_path)
-    st.image(image, caption="Uploaded Image", use_column_width=True)
+    st.image(image, caption="Uploaded Image", use_container_width=True)
     st.success(f"✅ Image uploaded: {uploaded_file.name}")
 else:
     # Use demo image if available
@@ -121,7 +121,7 @@ else:
     if demo_path.exists():
         image_path = str(demo_path)
         image = Image.open(image_path)
-        st.image(image, caption="Demo Image (data/demo.jpg)", use_column_width=True)
+        st.image(image, caption="Demo Image (data/demo.jpg)", use_container_width=True)
         st.info("ℹ️ Using demo image. Upload your own image above to replace it.")
     else:
         st.warning("⚠️ No image uploaded and demo image not found")
@@ -157,8 +157,6 @@ if (image_path is not None and
         st.session_state.process_output = ""
     if 'model_ready' not in st.session_state:
         st.session_state.model_ready = False
-    if 'output_buffer' not in st.session_state:
-        st.session_state.output_buffer = ""
         
     # Start inference button
     if st.button("🔥 Start Interactive Chat", type="primary", use_container_width=True):
@@ -180,49 +178,35 @@ if (image_path is not None and
                 st.rerun()
             except Exception as e:
                 st.error(f"❌ Error starting process: {str(e)}")
-        else:
-            try:
-                # Check if process is still running
-                if st.session_state.chat_process.poll() is not None:
-                    st.error("❌ Process has terminated")
-                    st.session_state.chat_process = None
-                    st.session_state.model_ready = False
-                    st.rerun()
-                else:
-                    # Read available output
-                    try:
-                        # Use non-blocking read
-                        import select
-                        if select.select([st.session_state.chat_process.stdout], [], [], 0)[0]:
-                            line = st.session_state.chat_process.stdout.readline()
-                            if line:
-                                st.session_state.process_output += line
-                                
-                                # Check if model is ready
-                                if (st.session_state.process_output.strip().endswith("user:") and 
-                                    not st.session_state.model_ready):
-                                    st.session_state.model_ready = True
-                    except Exception as read_error:
-                        # Continue if no output available
-                        pass
-                        
-                # Display current output (remove duplicate)
-                if st.session_state.process_output:
-                    display_output = st.session_state.process_output[-2000:] if len(st.session_state.process_output) > 2000 else st.session_state.process_output
-                    st.text_area(
-                        "📟 Process Output:",
-                        value=display_output,
-                        height=300,
-                        disabled=True
-                    )
-                
-                # Show loading status
-                if not st.session_state.model_ready:
-                    st.info("🔄 Model is loading... Please wait for the 'user:' prompt.")
+    
+    # Monitor running process
+    if st.session_state.chat_process is not None:
+        try:
+            # Check if process is still running
+            if st.session_state.chat_process.poll() is not None:
+                st.error("❌ Process has terminated")
+                st.session_state.chat_process = None
+                st.session_state.model_ready = False
+                st.rerun()
+            else:
+                # Read available output
+                try:
+                    # Use non-blocking read for Linux
+                    if select.select([st.session_state.chat_process.stdout], [], [], 0)[0]:
+                        line = st.session_state.chat_process.stdout.readline()
+                        if line:
+                            st.session_state.process_output += line
+                            
+                            # Check if model is ready
+                            if (st.session_state.process_output.strip().endswith("user:") and 
+                                not st.session_state.model_ready):
+                                st.session_state.model_ready = True
+                except Exception as read_error:
+                    # Continue if no output available
+                    pass
                     
                 # Display current output
                 if st.session_state.process_output:
-                    # Show last 2000 characters to avoid UI slowdown
                     display_output = st.session_state.process_output[-2000:] if len(st.session_state.process_output) > 2000 else st.session_state.process_output
                     st.text_area(
                         "📟 Process Output:",
@@ -234,7 +218,7 @@ if (image_path is not None and
                 # Show loading status
                 if not st.session_state.model_ready:
                     st.info("🔄 Model is loading... Please wait for the 'user:' prompt.")
-                    
+                
                 # Show chat interface when model is ready
                 if st.session_state.model_ready:
                     st.subheader("💬 Chat Interface")
@@ -251,15 +235,6 @@ if (image_path is not None and
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error sending input: {e}")
-                        
-                        # Display chat history
-                        if st.session_state.chat_history:
-                            st.subheader("📜 Chat History")
-                            for message in st.session_state.chat_history:
-                                if message.startswith("User:"):
-                                    st.markdown(f"**{message}**")
-                                else:
-                                    st.markdown(message)
                     
                     with col_q2:
                         if st.button("🌐 Trong bức ảnh có gì?"):
