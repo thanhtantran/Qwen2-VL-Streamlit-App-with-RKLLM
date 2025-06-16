@@ -24,8 +24,9 @@ This Streamlit web application provides a user-friendly interface for running Qw
    ```
    models/
    └── Qwen2-VL-2B-RKLLM/
-       ├── qwen2_vl_2b_vision_rk3588.rknn
-       └── qwen2-vl-llm_rk3588.rkllm
+       ├── Qwen2-VL-2B-Instruct.rkllm
+       └── Qwen2-VL-2B-Instruct.rknn
+   └── Qwen2-VL-7B-RKLLM/
    ```
 
 4. **Demo Image**: Ensure `data/demo.jpg` exists for the demo functionality
