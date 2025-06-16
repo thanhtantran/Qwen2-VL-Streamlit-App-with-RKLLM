@@ -316,7 +316,7 @@ if (image_path is not None and
                 output_container = st.empty()
                 with output_container.container():
                     st.text_area(
-                        "",
+                        "Process Output",
                         value=display_output,
                         height=300,
                         disabled=True,
