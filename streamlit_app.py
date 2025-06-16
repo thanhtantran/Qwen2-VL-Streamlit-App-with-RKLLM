@@ -312,12 +312,14 @@ if (image_path is not None and
                 if st.button("❓ What is in the image?"):
                     st.session_state.process_manager.send_command("0")
                     st.session_state.chat_history.append("User: [0] What is in the image?")
+                    st.session_state.waiting_for_response = True
                     st.rerun()
             
             with col_q2:
                 if st.button("🌐 Trong bức ảnh có gì?"):
                     st.session_state.process_manager.send_command("1")
                     st.session_state.chat_history.append("User: [1] Trong bức ảnh có gì?")
+                    st.session_state.waiting_for_response = True
                     st.rerun()
             
             # Custom input
@@ -328,8 +330,11 @@ if (image_path is not None and
             )
             
             if st.button("📤 Send Custom Question") and user_input:
-                st.session_state.process_manager.send_command(user_input)
+                # Add <image> prefix to custom questions
+                formatted_question = f"<image>{user_input}"
+                st.session_state.process_manager.send_command(formatted_question)
                 st.session_state.chat_history.append(f"User: {user_input}")
+                st.session_state.waiting_for_response = True
                 st.rerun()
             
             # Display chat history
